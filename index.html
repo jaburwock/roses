@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.min.css">
+    <title>Roses</title>
+  </head>
+  <body>
+     <!-- Header -->
+    <header class="container-fluid" style="border-bottom: thin solid var(--pico-muted-color)">
+      <nav>
+        <!-- Left-aligned site title -->
+        <ul><h1>D3roses</h1></ul>
+        <!-- Right-aligned block of links -->
+        <ul>
+          <li><a class="contrast" href="#">About</a></li>
+          <li><a class="contrast" href="https://github.com/jaburwock/roses" target="_blank">GitHub</a></li>
+          <!-- Theme selector/display -->
+          <li style="border-left: thin solid var(--pico-muted-color)">
+            <details class="dropdown">
+              <summary role="button" class="secondary">Auto</summary>
+              <ul>
+                <li><a href="#" data-theme-switcher="auto">Auto</a></li>
+                <li><a href="#" data-theme-switcher="light">Light</a></li>
+                <li><a href="#" data-theme-switcher="dark">Dark</a></li>
+              </ul>
+            </details>
+          </li>
+        </ul>
+      </nav>
+    </header>
+
+    <main class="container-fluid">
+
+      Content.
+
+    </main>
+
+
+    <main class="container-fluid">
+
+      More content.
+
+    </main>
+
+
+
+
+
+
+
+
+    <div id="app"></div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module" src="/src/minimal-theme-switcher.js"></script>
+  </body>
+</html>
