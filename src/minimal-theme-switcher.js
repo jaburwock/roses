@@ -35,7 +35,6 @@ const themeSwitcher = {
   // Init switchers
   initSwitchers() {
     const buttons = document.querySelectorAll(this.buttonsTarget);
-    console.log(this._scheme);
     buttons.forEach((button) => {
       button.addEventListener(
         "click",

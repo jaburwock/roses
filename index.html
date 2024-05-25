@@ -9,16 +9,16 @@
   </head>
   <body>
      <!-- Header -->
-    <header class="container-fluid" style="border-bottom: thin solid var(--pico-muted-color)">
+    <header class="container-fluid" style="border-bottom: thin solid var(--pico-muted-border-color)">
       <nav>
         <!-- Left-aligned site title -->
-        <ul><h1>D3roses</h1></ul>
+        <ul><strong style="font-size: 1.5rem;">D3Roses</strong></ul>
         <!-- Right-aligned block of links -->
         <ul>
           <li><a class="contrast" href="#">About</a></li>
           <li><a class="contrast" href="https://github.com/jaburwock/roses" target="_blank">GitHub</a></li>
           <!-- Theme selector/display -->
-          <li style="border-left: thin solid var(--pico-muted-color)">
+          <li>
             <details class="dropdown">
               <summary role="button" class="secondary">Auto</summary>
               <ul>
@@ -34,25 +34,28 @@
 
     <main class="container-fluid">
 
-      Content.
+      <section>
+        <h1>Heading</h1>
+
+        <div id="app" style="height:40vh;"></div>
+
+        <p>Some descriptive text.</p>
+
+      </section>
+
+      <section><hr/></section>
+
+      <section>
+        Section 2
+      </section>
 
     </main>
 
 
-    <main class="container-fluid">
-
-      More content.
-
-    </main>
 
 
 
 
-
-
-
-
-    <div id="app"></div>
 
     <script type="module" src="/main.js"></script>
     <script type="module" src="/src/minimal-theme-switcher.js"></script>
