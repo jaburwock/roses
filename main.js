@@ -3,6 +3,23 @@ import { randomRectangleTrack, helixTrack, lollipopTrack } from '/src/tracks.js'
 
 
 
+
+// Plots list of variant objects with:
+// Required fields: {chr, pos}
+// Optional fields: {palette, thorns, leaves, height}
+// Palette defaults to blue, thorns to 0, leaves to 0 and height to randomly vary and avoid overlaps
+function roseTrack(svg, variants, x, y, lowerY) {
+
+}
+
+// Plots list of interval objects with:
+// Required fields: {chr, start, stop}
+// Optional fields: {name, colour, tooltips?}
+function intervalTrack(svg, intervals, x, y) {
+
+}
+
+
 function drawPlot(targetDiv) {
   const element = d3.select(targetDiv);
   element.style("background-color", "var(--pico-card-background-color)");
@@ -14,6 +31,9 @@ function drawPlot(targetDiv) {
     .attr("width", width)
     .attr("height", height)
     .attr("viewbox", [0, 0, width, height]);
+
+  // TODO: Define intervals to later be plotted first in preparation for user/API input
+  // TODO: Calculate plot positions from given list of intervals (bed format, 0-based, half-open)
 
   // Stand in for nucleotide positions
   const positions = d3.range(1, 101);
@@ -37,9 +57,9 @@ function drawPlot(targetDiv) {
 
   const [lps, stems] = lollipopTrack(svg, positions, x, y0, y1)
   // Draw tracks onto axes with track functions
-  const hel0 = helixTrack(svg, positions, x, y1)
-  const rec1 = randomRectangleTrack(svg, positions, x, y2, "steelblue", 3, 0.32);
-  const rec2 = randomRectangleTrack(svg, positions, x, y3, "darkorange", 5, 0.5);
+  const rec1 = randomRectangleTrack(svg, positions, x, y1, "steelblue", 3, 0.4);
+  const rec2 = randomRectangleTrack(svg, positions, x, y2, "darkorange", 5, 0.5);
+  const rec3 = randomRectangleTrack(svg, positions, x, y3, "slategrey", 5, 0.5);
 
   // Draw top track x axis
   const mainX = svg.append("g")
@@ -53,10 +73,9 @@ function drawPlot(targetDiv) {
     const xz = event.transform.rescaleX(x);
     // Calculate rescaled scale (k), x and y values (from default scale of 1)
     const rs = event.transform.scale(1);
-    // rs.k > 2.5 ? hel0.unwind() : hel0.wind();  // Simple zoom-dependent helix winding
-    hel0.attr("transform", `translate(${rs.x}) scale(${rs.k}, 1)`)
     rec1.attr("transform", `translate(${rs.x}) scale(${rs.k}, 1)`)
     rec2.attr("transform", `translate(${rs.x}) scale(${rs.k}, 1)`)
+    rec3.attr("transform", `translate(${rs.x}) scale(${rs.k}, 1)`)
     lps.attr("transform", d => `translate(${xz(d.position)}, ${y0(d.height)}) scale(${d.size})`)
     stems.attr("transform", d => `translate(${xz(d.position)})`)
     mainX.call(d3.axisBottom(xz));

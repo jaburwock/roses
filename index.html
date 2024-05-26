@@ -4,7 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.min.css">
+    <!-- <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.min.css"> -->
+    <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.violet.min.css">
+    <style>
+      :root {
+        --pico-font-size: 100%;
+      }
+    </style>
     <title>Roses</title>
   </head>
   <body>
@@ -35,19 +41,151 @@
     <main class="container-fluid">
 
       <section>
-        <h1>Heading</h1>
+        <h1>Plot</h1>
 
         <div id="app" style="height:40vh;"></div>
+        <hr/>
 
-        <p>Some descriptive text.</p>
+
+        <!-- ----------- Data Input Menu ----------- -->
+        <details open>
+          <summary role="button" style="padding:8px;">Data Input</summary>
+          <!-- <div class="grid" style="grid-template-columns: 2fr 4fr;"> -->
+          <div class="grid">
+            <!-- Column 1 -->
+            <div>
+              <textarea
+                name="textinput"
+                placeholder="Enter intervals/variants, drag and drop a supported file type or press the button to select a file."
+                aria-label="Input plot data"
+                style="height:12vh;min-height:12vh;"
+              ></textarea>
+              <div class="grid" style="grid-template-columns: 1fr 3fr;">
+                <button class="secondary" style="height:38px;margin:auto;line-height: 0em;">Plot</button>
+                <label for="file">
+                  <!-- File browser -->
+                  <input style="margin-bottom: 0;" type="file" id="file" name="file" />
+                </label>
+              </div>
+            </div>
+
+            <!-- Column 2 -->
+            <div>
+              <form role="search">
+                <input name="search" type="search" placeholder="Search a gene by name or transcript." />
+                <input type="submit" value="Search" />
+              </form>
+              <!-- <div aria-busy="true"></div> -->
+            </div>
+          </div>
+        </details>
+
+        <!-- ----------- Loaded Data Menu/Table ----------- -->
+        <details>
+          <summary role="button" style="padding:8px;">Loaded Intervals - <kbd>10</kbd> </summary>
+          <p>Table of currently plotted intervals here. Probably just set up a div to target with d3.</p>
+          <!-- <div aria-busy="true"></div> -->
+        </details>
+
+        <!-- ----------- Settings Menu ----------- -->
+        <details>
+          <summary role="button" style="padding:8px;">Settings
+          </summary>
+          <p>Misc other settings.</p>
+          <!-- Large setting grid block start -->
+          <div class="grid">
+            <label for="valid">
+              Valid
+              <input type="text" id="valid" name="valid" placeholder="Valid" aria-invalid="false" />
+            </label>
+            <label for="invalid">
+              Invalid
+              <input
+                type="text"
+                id="invalid"
+                name="invalid"
+                placeholder="Invalid"
+                aria-invalid="true"
+              />
+            </label>
+            <label for="disabled">
+              Disabled
+              <input type="text" id="disabled" name="disabled" placeholder="Disabled" disabled />
+            </label>
+          </div>
+
+          <div class="grid">
+            <!-- Date-->
+            <label for="date"
+              >Date
+              <input type="date" id="date" name="date" />
+            </label>
+
+            <!-- Time-->
+            <label for="time"
+              >Time
+              <input type="time" id="time" name="time" />
+            </label>
+
+            <!-- Color-->
+            <label for="color"
+              >Color
+              <input type="color" id="color" name="color" value="#0eaaaa" />
+            </label>
+          </div>
+
+          <div class="grid">
+            <!-- Checkboxes -->
+            <fieldset>
+              <legend><strong>Checkboxes</strong></legend>
+              <label for="checkbox-1">
+                <input type="checkbox" id="checkbox-1" name="checkbox-1" checked />
+                Checkbox
+              </label>
+              <label for="checkbox-2">
+                <input type="checkbox" id="checkbox-2" name="checkbox-2" />
+                Checkbox
+              </label>
+            </fieldset>
+
+            <!-- Radio buttons -->
+            <fieldset>
+              <legend><strong>Radio buttons</strong></legend>
+              <label for="radio-1">
+                <input type="radio" id="radio-1" name="radio" value="radio-1" checked />
+                Radio button
+              </label>
+              <label for="radio-2">
+                <input type="radio" id="radio-2" name="radio" value="radio-2" />
+                Radio button
+              </label>
+            </fieldset>
+
+            <!-- Switch -->
+            <fieldset>
+              <legend><strong>Switches</strong></legend>
+              <label for="switch-1">
+                <input type="checkbox" id="switch-1" name="switch-1" role="switch" checked />
+                Switch
+              </label>
+              <label for="switch-2">
+                <input type="checkbox" id="switch-2" name="switch-2" role="switch" />
+                Switch
+              </label>
+            </fieldset>
+          </div>
+          <!-- Large setting grid block end -->
+          <!-- Confirmation Buttons -->
+          <div class="grid" style="grid-template-columns: 2fr 1fr;">
+            <input type="submit" value="Submit" onclick="event.preventDefault()" />
+            <input type="reset" value="Reset" onclick="event.preventDefault()" />
+          </div>
+        </details>
+
 
       </section>
 
       <section><hr/></section>
-
-      <section>
-        Section 2
-      </section>
 
     </main>
 
