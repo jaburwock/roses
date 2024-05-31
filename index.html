@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.min.css"> -->
-    <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.violet.min.css">
+    <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.min.css">
+    <!-- <link rel="stylesheet" href="node_modules/@picocss/pico/css/pico.violet.min.css"> -->
     <style>
       :root {
         --pico-font-size: 100%;
@@ -40,11 +40,15 @@
 
     <main class="container-fluid">
 
-      <section>
-        <h1>Plot</h1>
 
-        <div id="app" style="height:40vh;"></div>
-        <hr/>
+      <section>
+        <details open>
+          <summary role="button" style="font-size:1.8em;padding:8px;"><strong>Plot</strong></summary>
+
+          <div id="app" style="height:40vh;"></div>
+          <hr/>
+
+        </details>
 
 
         <!-- ----------- Data Input Menu ----------- -->
@@ -62,9 +66,9 @@
               ></textarea>
               <div class="grid" style="grid-template-columns: 1fr 3fr;">
                 <button class="secondary" style="height:38px;margin:auto;line-height: 0em;">Plot</button>
-                <label for="file">
+                <label for="filepicker">
                   <!-- File browser -->
-                  <input style="margin-bottom: 0;" type="file" id="file" name="file" />
+                  <input style="margin-bottom: 0;" type="file" id="filepicker" name="file" />
                 </label>
               </div>
             </div>

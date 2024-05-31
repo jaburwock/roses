@@ -148,7 +148,7 @@ export function lollipopTrack(svg, xs, x, y, lowerY) {
   // Add unique ids to variants to handle updates
   variants = variants.map((d, i) => ({id: i, ...d}))
 
-  // Drawing curby stems?
+  // Drawing curly stems
   const flowerstems = svg.append("g")
     .selectAll("path")
     .data(variants, d => d.id)
