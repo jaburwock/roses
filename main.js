@@ -37,6 +37,12 @@ chr13	32319076	32319425	BRCA2	.	+
 chr13	32325075	32325184	BRCA2	.	+
 chr13	32398161	32400268	BRCA2	.	+`;
 
+const TEST_BED_SIMPLE_00 = `chr13	0	10	BRCA2	.	+
+chr13	15	20	BRCA2	.	+
+`;
+const TEST_BED_SIMPLE_01 = `chr13	100	110	BRCA2	.	+
+chr13	115	120	BRCA2	.	+
+`;
 
 
 // Plots list of variant objects with:
@@ -57,7 +63,7 @@ function roseTrack(svg, variants, x, y, lowerY) {
 // Parse bed format into internal interval structure
 function intervalsFromBed(data) {
   // TODO: Don't imply optional fields beyond first three required for bed format
-  return d3.tsvParseRows(data, d => {
+  const rows = d3.tsvParseRows(data, d => {
     return {
       chrom: d[0],
       start: parseInt(d[1]),
@@ -66,6 +72,7 @@ function intervalsFromBed(data) {
       strand: d[5],
     };
   });
+  return rows;
 }
 
 
@@ -242,11 +249,14 @@ async function main() {
   // drawPlot(plotTarget);
 
   const mainPlot = new TrackPlot(plotTarget);
-  mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS));
-  await new Promise(r => setTimeout(r, 2000));
-  mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE), {colour: "darkorange"});
-  await new Promise(r => setTimeout(r, 2000));
-  mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS), {colour: "slategrey", yFraction: 2, yOrder: -1, type: "span"});
+  mainPlot.addTrack("Track1", intervalsFromBed(TEST_BED_SIMPLE_00));
+  mainPlot.addTrack("Track1", intervalsFromBed(TEST_BED_SIMPLE_01));
+  // await new Promise(r => setTimeout(r, 2000));
+  // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS));
+  // await new Promise(r => setTimeout(r, 2000));
+  // mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE), {colour: "darkorange"});
+  // await new Promise(r => setTimeout(r, 2000));
+  // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS), {colour: "slategrey", yFraction: 2, yOrder: -1, type: "span"});
   mainPlot.initializeZoom();
   // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE));

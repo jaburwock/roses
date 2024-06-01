@@ -4,6 +4,8 @@ import * as d3 from 'd3';
 
 // Global TODO:
 // - Finish implementing point/variant tracks
+// - Write some very simple test tracks/intervals to check coordinate systems/positioning
+//    - Confirm intervals match expected locations based on source formats (bed/gff/gtf)
 
 
 
@@ -33,7 +35,7 @@ export default class TrackPlot {
         maxPocketGap: 20,
         // Pocket gaps get messed up when gapPadding > 90?
         // TODO: Also seems to error when gapPadding = 0. Fixed, range generation was off by one.
-        gapPadding: 80,
+        gapPadding: 0,
     }
 
     constructor(targetDiv, config={}) {
@@ -49,11 +51,11 @@ export default class TrackPlot {
         this.height = this.container.node().offsetHeight;
 
         this.xCoords = [];  // Plot coordinate    => genomic coordinate
-        this.gCoords = [];  // Genomic coordinate => plot coordinate
+        this.gCoords = [];  // Genomic coordinate => plot coordinate (sparse array)
         // this.xcMaps = {};  // TODO: Collect maps/sparse-arrays translating from different coordinate systems to positions on plot x axis
         this.xScale = d3.scaleLinear();
         this.tickFunctions = {
-            contig: d => 'g.' + this.xCoords[d]
+            contig: d => (this.xCoords[d] ? 'g.' : '') + (this.xCoords[d] ?? '')
         };
         this.yScales = [];
 
@@ -112,17 +114,21 @@ export default class TrackPlot {
     }
 
     // Draw and update lines to indicate x-coordinate breaks of pockets
-    #drawPockets() {
+    // TODO: Draw as rectangles instead that can optionally shade the areas of the gaps
+    // TODO: Maybe #drawGaps() is a more descriptive name
+    #drawPockets(type="line") {
         const top = this.yScales[0](0.5);
         const bottom = this.yScales[this.yScales.length - 1](-0.5);
+        // Create array with start of each pocket as an identifer and it's end position mapped to the x coordinate space
         const markCoords = this.pockets.map(p => 
-            [p[1], this.gCoords[p[1]] + this.config.gapPadding]
+            [p[0], this.gCoords[p[1]] + this.config.gapPadding]
         );
         this.pocketMarks = this.pocketContainer
             .selectAll("line")
             .data(markCoords, d => d[0])
             .join("line");
-        this.pocketMarks.transition().duration(600)
+        this.pocketMarks
+            .transition().duration(600)
               .attr("stroke", "var(--pico-color)")
               .attr("stroke-width", 1)
               .attr("opacity", 0.8)
@@ -200,26 +206,23 @@ export default class TrackPlot {
         // Keep track of the highest last seen end position
         // If a start position is greater than this.config.maxPocketGap away from the last highest seen end position
         // Close the last pocket, push to array and open a new pocket starting at that start position
-        // console.log("again");
-        let lastHighestStop = 0;
-        let pocketStart = 0;
-        for (const it of allIntervals) {
+        let lastHighestStop = allIntervals[0].stop;
+        let pocketStart = allIntervals[0].start;
+        for (const it of allIntervals.slice(1)) {
             if (it.start > (lastHighestStop + this.config.maxPocketGap)) {
                 newPockets.push([pocketStart, lastHighestStop]);
                 pocketStart = it.start;
             }
-            lastHighestStop = it.stop > (lastHighestStop + this.config.maxPocketGap) ? it.stop : lastHighestStop;
+            lastHighestStop = it.stop > lastHighestStop ? it.stop : lastHighestStop;
         }
-        // Push final trailing pocket and remove erroneous [0, 0] pocket indicating no intervals near contig 0
+        // Push final trailing pocket
         newPockets.push([pocketStart, lastHighestStop]);
-        newPockets = newPockets[0][0] == 0 && newPockets[0][1] == 0 ? newPockets.slice(1) : newPockets;
         this.pockets = newPockets;
         // xCoords is an array equal to plot length containing corresponding genomic coordinates at each position
         this.xCoords = this.pockets.map(d => d3.range(d[0] - this.config.gapPadding, d[1] + this.config.gapPadding + 1)).flat();
         // Sparse array mapping gCoords to xCoords
         this.gCoords = new Array();
         this.xCoords.forEach((e, i) => this.gCoords[e] = i);
-        console.log(this.xCoords);
         // console.log(gCoords.length);
         // Also create an array containing the index of the contig coordinate at the beginning of each pocket
         //   (can also use this to visually indicate breakpoints)
