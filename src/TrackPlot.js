@@ -36,6 +36,7 @@ export default class TrackPlot {
         // Pocket gaps get messed up when gapPadding > 90?
         // TODO: Also seems to error when gapPadding = 0. Fixed, range generation was off by one.
         gapPadding: 0,
+        gapPaddingType: "fixed",  // TODO: Add option to make gap padding proportional to absolute distance between pockets
     }
 
     constructor(targetDiv, config={}) {
@@ -52,10 +53,12 @@ export default class TrackPlot {
 
         this.xCoords = [];  // Plot coordinate    => genomic coordinate
         this.gCoords = [];  // Genomic coordinate => plot coordinate (sparse array)
-        // this.xcMaps = {};  // TODO: Collect maps/sparse-arrays translating from different coordinate systems to positions on plot x axis
+        this.fCoords = new Map();
+        this.xCoordMaps = {};  // TODO: Collect maps/sparse-arrays translating from different coordinate systems to positions on plot x axis
         this.xScale = d3.scaleLinear();
         this.tickFunctions = {
-            contig: d => (this.xCoords[d] ? 'g.' : '') + (this.xCoords[d] ?? '')
+            contig: d => (this.xCoords[d] ? 'g.' : '') + (this.xCoords[d] ?? ''),   // This is just awful, switch to maps and check membership gracefully
+            feature: d => this.fCoords.has(d) ? 'c.' + this.fCoords.get(d) : '',
         };
         this.yScales = [];
 
@@ -83,11 +86,7 @@ export default class TrackPlot {
         });
         this.tracks.sort((a, b) => a.yOrder - b.yOrder);
         this.recalculatePockets();
-        // this.updateYs();
-        // this.updateX();
-        // So when do the tracks actually get drawn/updated?
-        // In draw I reckon (so can probably remove above updateX since draw just calls it straightaway)
-        // Also maybe make draw optional so can add a number of tracks then draw all at once
+        // TODO: Maybe make draw optional so can add a number of tracks then draw all at once
         this.draw();
     }
 
@@ -138,6 +137,7 @@ export default class TrackPlot {
               .attr("x2", d => this.xScale(d[1]))
     }
 
+    // TODO: Implement
     #drawPoints(track, y) {
         const pointDefaults = {
             pointType: "circle",  // One of: circle, square, star, flower, rose
@@ -167,7 +167,7 @@ export default class TrackPlot {
     // Called on addition or vertical resizing of track
     updateYs(drawYs=false) {
         // Loop through this.tracks
-        // Sum trackFraction values and calculate proportions as trackFraction / totalFractions
+        // Sum yFraction values and calculate proportions as trackFraction / totalFractions
         // Rescale and transform y axes to new heights and positions
         const fractionTotal = d3.sum(this.tracks, d => d.yFraction);
         const yProportions = this.tracks.map(d => d.yFraction / fractionTotal);
@@ -190,10 +190,6 @@ export default class TrackPlot {
     // Recalculate pockets from tracks and maxPocketGap (number of positions between intervals/features to create a new pocket)
     // Also recalculates plotEnd, xScale and relative coordinate-spaces relative to the new pockets
     recalculatePockets() {
-        // Loop through this.tracks
-        // And all the intervals in each track
-        // And determine the bounds of the plot view pockets
-        let newPockets = [];
         // Aggregate intervals
         let allIntervals = [];
         for (const track of this.tracks) {
@@ -208,6 +204,7 @@ export default class TrackPlot {
         // Close the last pocket, push to array and open a new pocket starting at that start position
         let lastHighestStop = allIntervals[0].stop;
         let pocketStart = allIntervals[0].start;
+        let newPockets = [];
         for (const it of allIntervals.slice(1)) {
             if (it.start > (lastHighestStop + this.config.maxPocketGap)) {
                 newPockets.push([pocketStart, lastHighestStop]);
@@ -219,26 +216,25 @@ export default class TrackPlot {
         newPockets.push([pocketStart, lastHighestStop]);
         this.pockets = newPockets;
         // xCoords is an array equal to plot length containing corresponding genomic coordinates at each position
-        this.xCoords = this.pockets.map(d => d3.range(d[0] - this.config.gapPadding, d[1] + this.config.gapPadding + 1)).flat();
+        this.xCoords = this.pockets.map(d => d3.range(d[0] - this.config.gapPadding + 1, d[1] + this.config.gapPadding + 1)).flat();
         // Sparse array mapping gCoords to xCoords
-        this.gCoords = new Array();
+        this.gCoords = new Array();  // Genomic/contig coordinate map
         this.xCoords.forEach((e, i) => this.gCoords[e] = i);
-        // console.log(gCoords.length);
-        // Also create an array containing the index of the contig coordinate at the beginning of each pocket
-        //   (can also use this to visually indicate breakpoints)
-        // This index array can then be used to binary search the location of a given genomic coordinate in the plot array
-        //     TODO: Write lookup method for this for later plotting of variants
-        // Or use sparse array/map to hold genomic > plot coordinate mappings
+        // TODO: Add coordinate map for feature-relative tick function and data mapping
+        // TODO: Also probably put coordinate maps in an object like the tick functions
+        // Feature coordinate map relative to top track intervals
+        const fCoords = new Map();
+        let count = 0;
+        this.tracks[0].intervals.forEach(d => {
+            this.gCoords.slice(d.start, d.stop + 1).forEach(e => {
+                fCoords.set(e, count);
+                count += 1;
+            });
+        });
+        this.fCoords = fCoords;
     }
 
     updateX(drawX=false) {
-        // So now we have an array of pairs of [start, stop] defining the contiguous contig regions to be plotted
-        // Next, calculate the total length (N) of this space (plus any defined visual padding between pockets, though maybe maxPocketGap defines padding? Though nah cause you might want gapped elements to be plotted together but still have some visual padding between pockets)
-        // Now create an array (A) of length N with the corresponding contig coordinates at each index
-        // Also create an array containing the index of the contig coordinate at the beginning of each pocket
-        //   (can also use this to visually indicate breakpoints)
-        // This index array can then be used to binary search the location of a given genomic coordinate in the plot array
-        //     TODO: Write lookup method for this for later plotting of variants
         // xScale is just a map, doesn't hold any references to anything so can replace it
         this.xScale = d3.scaleLinear()
             .domain([0, this.xCoords.length])
@@ -271,14 +267,15 @@ export default class TrackPlot {
             .attr("x1", d => xz(d[1]))
             .attr("x2", d => xz(d[1]));
         this.xBottom.call(d3.axisBottom(xz).tickFormat(this.tickFunctions.contig));
-        this.xTop.call(d3.axisTop(xz));
+        this.xTop.call(d3.axisTop(xz).tickFormat(this.tickFunctions.feature));
+        // this.xTop.call(d3.axisTop(xz));
     }
 
     initializeZoom() {
         // -------- Plot Zoom Handling --------
         // Track zoom handling function
         const minScale = 1;
-        const maxScale = 800;
+        const maxScale = 1000;
 
         // Setting up zoom handling using zoom handling function
         const zoom = d3.zoom()

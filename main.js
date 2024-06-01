@@ -248,9 +248,9 @@ async function main() {
   // TODO: Then like, setupFilePicker(plot);
   // drawPlot(plotTarget);
 
-  const mainPlot = new TrackPlot(plotTarget);
-  mainPlot.addTrack("Track1", intervalsFromBed(TEST_BED_SIMPLE_00));
-  mainPlot.addTrack("Track1", intervalsFromBed(TEST_BED_SIMPLE_01));
+  const mainPlot = new TrackPlot(plotTarget, {gapPadding: 4});
+  mainPlot.addTrack("Track1", intervalsFromBed(TEST_BED_SIMPLE_00), {colour: "pink"});
+  mainPlot.addTrack("Track2", intervalsFromBed(TEST_BED_SIMPLE_01));
   // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS));
   // await new Promise(r => setTimeout(r, 2000));
