@@ -33,7 +33,7 @@ chr13	32398161	32400268	BRCA2	.	+`;
 
 const TEST_INTERVALS_FIVE = `chr13	1000	1100	BRCA2	.	+
 chr13	32316421	32316527	BRCA2	.	+
-chr13	32319076	32319325	BRCA2	.	+
+chr13	32319076	32319425	BRCA2	.	+
 chr13	32325075	32325184	BRCA2	.	+
 chr13	32398161	32400268	BRCA2	.	+`;
 
@@ -243,9 +243,11 @@ async function main() {
 
   const mainPlot = new TrackPlot(plotTarget);
   mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS));
+  await new Promise(r => setTimeout(r, 2000));
   mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE), {colour: "darkorange"});
   await new Promise(r => setTimeout(r, 2000));
-  mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS), {colour: "slategrey", yFraction: 2, yOrder: -1});
+  mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS), {colour: "slategrey", yFraction: 2, yOrder: -1, type: "span"});
+  mainPlot.initializeZoom();
   // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE));
   // mainPlot.draw();
