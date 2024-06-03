@@ -1,42 +1,25 @@
 import * as d3 from 'd3';
 
 
-
 // Global TODO:
 // - Finish implementing point/variant tracks
 // - Write some very simple test tracks/intervals to check coordinate systems/positioning
 //    - Confirm intervals match expected locations based on source formats (bed/gff/gtf)
-
-
-
-// Parse bed format into internal interval structure
-function intervalsFromBed(data) {
-  // TODO: Don't imply optional fields beyond first three required for bed format
-  return d3.tsvParseRows(data, d => {
-    return {
-      chrom: d[0],
-      start: parseInt(d[1]),
-      stop: parseInt(d[2]),
-      featureName: d[3],
-      strand: d[5],
-    };
-  });
-}
-
-// TODO: Everything basically assumes intervals are on the same contig at the moment, implement multiple contig handling
-
+// - Everything basically assumes intervals are on the same contig at the moment, implement multiple contig handling
 export default class TrackPlot {
     // Config object with default values
     config = {
-        marginLeft:   40,
+        marginLeft:   60,
         marginRight:  40,
         marginTop:    40,
         marginBottom: 40,
         maxPocketGap: 20,
         // Pocket gaps get messed up when gapPadding > 90?
-        // TODO: Also seems to error when gapPadding = 0. Fixed, range generation was off by one.
+        // TODO: Also seems to error when gapPadding = 0. Fixed, range generation was off by one. Not fixed again.
         gapPadding: 0,
         gapPaddingType: "fixed",  // TODO: Add option to make gap padding proportional to absolute distance between pockets
+        addTrackLabels: true,
+        addIntervalLabels: true,
     }
 
     constructor(targetDiv, config={}) {
@@ -51,22 +34,33 @@ export default class TrackPlot {
         this.width  = this.container.node().offsetWidth;
         this.height = this.container.node().offsetHeight;
 
+        // TODO: I think the below arrays/lookups can be grouped into
+        // - Tick coordinate lookups mapping from a given plot coordinate to some other coordinate system. Genomic, track, etc.
+        // - Scale coordinate lookups for mapping from other coordinate systems to positions on the x scale/domain.
+        //   Effectively the inverse of tick coordinate lookups.
+        // Tick coordinate lookups can either be simple dense arrays equal to the length of the x domain or maps if they
+        //   only partially cover the x domain. Both returning a coordinate value for a given set of x domain indices.
+        // Scale coordinate lookups are probably best as maps or objects as other coordinate systems will vary and generally be sparse
+        //    relative to the domain.
         this.xCoords = [];  // Plot coordinate    => genomic coordinate
+        this.fCoords = new Map();  // Plot coordinate => top track interval-relative coordinate
         this.gCoords = [];  // Genomic coordinate => plot coordinate (sparse array)
-        this.fCoords = new Map();
         this.xCoordMaps = {};  // TODO: Collect maps/sparse-arrays translating from different coordinate systems to positions on plot x axis
         this.xScale = d3.scaleLinear();
         this.tickFunctions = {
             contig: d => (this.xCoords[d] ? 'g.' : '') + (this.xCoords[d] ?? ''),   // This is just awful, switch to maps and check membership gracefully
-            feature: d => this.fCoords.has(d) ? 'c.' + this.fCoords.get(d) : '',
+            track: d => this.fCoords.has(d) ? 'c.' + (this.fCoords.get(d) + 0) : '',  // 0-based top track-relative coords
         };
         this.yScales = [];
 
+        // Adding all plot element group elements here to set overall draw order
         this.svg = this.container.append("svg");
         this.xTop    = this.svg.append("g");
         this.xBottom = this.svg.append("g");
+        this.trackContainerGroup = this.svg.append("g");
         this.pocketContainer = this.svg.append("g");
         this.pocketMarks = undefined;
+        this.labelContainer = this.svg.append("g");
     }
 
     addTrack(trackName, intervals, trackConfig={}) {
@@ -76,13 +70,14 @@ export default class TrackPlot {
             yFraction: 1,
             yOrder: 1,
         }
+        // TODO: Store point tracks in a separate array? So they can be coalesced into a single upper track
         this.tracks.push({
             ...trackDefaults,
             ...trackConfig,
             name: trackName,
             intervals: intervals,
             yContainer: this.svg.append("g"),
-            trackContainer: this.svg.append("g"),
+            trackContainer: this.trackContainerGroup.append("g"),
         });
         this.tracks.sort((a, b) => a.yOrder - b.yOrder);
         this.recalculatePockets();
@@ -90,7 +85,7 @@ export default class TrackPlot {
         this.draw();
     }
 
-    // Draw/update plot details (also for window resize)
+    // Master function to draw/update plot details (also for window resize)
     draw() {
         this.width  = this.container.node().offsetWidth;
         this.height = this.container.node().offsetHeight;
@@ -101,15 +96,26 @@ export default class TrackPlot {
         this.updateYs();
         this.updateX();
         this.#drawPockets();
+        this.config.addTrackLabels && this.#drawLabels();
         // Loop through tracks and yScales drawing/updating track content
         for (const [track, y] of d3.zip(this.tracks, this.yScales)) {
             if (track.type == "span") {
-                this.#drawSpans(track, y);
+                this.#drawSpans(track, y, this.xScale);
             } else if (track.type == "point") {
                 this.#drawPoints(track, y);
                 // console.log("point tracks not yet implemented.")
             }
         }
+    }
+
+    #drawLabels() {
+        this.labelContainer
+            .selectAll("text")
+            .data(d3.zip(this.tracks, this.yScales), d => d[0].name)
+            .join("text").transition().duration(500)
+              .attr("text-anchor", "middle")
+              .attr("transform", d => `translate(${this.xScale(0) - 32}, ${d[1](0)}) rotate(-75)`)
+              .text(d => d[0].name)
     }
 
     // Draw and update lines to indicate x-coordinate breaks of pockets
@@ -119,9 +125,9 @@ export default class TrackPlot {
         const top = this.yScales[0](0.5);
         const bottom = this.yScales[this.yScales.length - 1](-0.5);
         // Create array with start of each pocket as an identifer and it's end position mapped to the x coordinate space
-        const markCoords = this.pockets.map(p => 
-            [p[0], this.gCoords[p[1]] + this.config.gapPadding]
-        );
+        const markCoords = this.pockets.map(p => {
+            return [p[0], this.gCoords[p[1] - 1] + this.config.gapPadding];
+        });
         this.pocketMarks = this.pocketContainer
             .selectAll("line")
             .data(markCoords, d => d[0])
@@ -149,18 +155,33 @@ export default class TrackPlot {
     }
 
     // Draw track information as spanning rectangles track container, return reference to selection of elements
-    #drawSpans(track, y) {
+    // TODO: Optionally add transition animation
+    #drawSpans(track, y, xScale) {
         const height = 0.5;
         const recHeight = Math.abs(y(-height) - y(height));
-        return track.trackContainer.selectAll("rect")
+        const tracks = track.trackContainer.selectAll("rect")
             .data(track.intervals, d => d.start)
             .join("rect")
-            .transition().duration(600)
+            // .transition().duration(600)
               .attr("y", y(height))
-              .attr("x", d => this.xScale(this.gCoords[d.start]))
+              .attr("x", d => xScale(this.gCoords[d.start]))
               .attr("fill", track.colour)
               .attr("height", recHeight)
-              .attr("width", d => this.xScale(this.gCoords[d.stop]) - this.xScale(this.gCoords[d.start]))
+              .attr("width", d => {
+                // console.log((this.gCoords[d.stop]) - xScale(this.gCoords[d.start]));
+                // Interval coordinates 0-based, half open. Subtract 1 from stop when calculating width
+                return xScale(this.gCoords[d.stop - 1]) - xScale(this.gCoords[d.start]);
+              })
+        this.config.addIntervalLabels && track.trackContainer
+            .selectAll("text")
+            .data(track.intervals, d => [d.featureName, d.start])
+            .join("text")
+              .attr("font-size", 12)
+              .attr("transform", d => `translate(${xScale(this.gCoords[d.start])}, ${y(0)}) rotate(0)`)
+            //   .text("transform", d => `translate(400, 400)`)
+              .text(d => d.featureName)
+
+        return tracks;
     }
 
     // Recalculate/update yscales from track yProportions
@@ -216,7 +237,7 @@ export default class TrackPlot {
         newPockets.push([pocketStart, lastHighestStop]);
         this.pockets = newPockets;
         // xCoords is an array equal to plot length containing corresponding genomic coordinates at each position
-        this.xCoords = this.pockets.map(d => d3.range(d[0] - this.config.gapPadding + 1, d[1] + this.config.gapPadding + 1)).flat();
+        this.xCoords = this.pockets.map(d => d3.range(d[0] - this.config.gapPadding, d[1] + this.config.gapPadding)).flat();
         // Sparse array mapping gCoords to xCoords
         this.gCoords = new Array();  // Genomic/contig coordinate map
         this.xCoords.forEach((e, i) => this.gCoords[e] = i);
@@ -226,7 +247,7 @@ export default class TrackPlot {
         const fCoords = new Map();
         let count = 0;
         this.tracks[0].intervals.forEach(d => {
-            this.gCoords.slice(d.start, d.stop + 1).forEach(e => {
+            this.gCoords.slice(d.start, d.stop).forEach(e => {
                 fCoords.set(e, count);
                 count += 1;
             });
@@ -239,14 +260,20 @@ export default class TrackPlot {
         this.xScale = d3.scaleLinear()
             .domain([0, this.xCoords.length])
             .range([this.config.marginLeft, this.width - this.config.marginRight]);
-        // TODO: Exclude stitched interval padding from relative coords
-        this.xBottom
-          .attr("transform", `translate(0, ${this.height - this.config.marginBottom - 0})`)
-          .call(d3.axisBottom(this.xScale).tickFormat(this.tickFunctions.contig));
-        // Draw axis with relative feature position coord ticks
+        this.updateXmarks(this.xScale);
+    }
+
+    updateXmarks(xs) {
+        // Function to update x axis marks based on passed x scale
+        // Used for both initial draw and zoom updates
+        // Top axis marks are relative to top track intervals
         this.xTop
-          .attr("transform", `translate(0, ${this.height - this.config.marginBottom})`)
-          .call(d3.axisTop(this.xScale));
+            .attr("transform", `translate(0, ${this.height - this.config.marginBottom - 0})`)
+            .call(d3.axisTop(xs).ticks(20).tickFormat(this.tickFunctions.track));
+        // Bottom axis marks are relative to start/stop coordinates of pockets (genomic/contig-relative)
+        this.xBottom
+            .attr("transform", `translate(0, ${this.height - this.config.marginBottom - 0})`)
+            .call(d3.axisBottom(xs).ticks().tickFormat(this.tickFunctions.contig));
     }
 
     removeTrack(trackName) {
@@ -256,9 +283,10 @@ export default class TrackPlot {
         const xz = event.transform.rescaleX(this.xScale);
         // Calculate rescaled scale (k), x and y values (from default scale of 1)
         const rs = event.transform.scale(1);
-        for (const track of this.tracks) {
+        for (const [track, y] of d3.zip(this.tracks, this.yScales)) {
             if (track.type == "span") {
-                track.trackContainer.attr("transform", `translate(${rs.x}) scale(${rs.k}, 1)`)
+                this.#drawSpans(track, y, xz);
+
             } else if (track.type == "point") {
                 // console.log("Zooming for point tracks not yet implemented.")
             }
@@ -266,9 +294,7 @@ export default class TrackPlot {
         this.pocketMarks
             .attr("x1", d => xz(d[1]))
             .attr("x2", d => xz(d[1]));
-        this.xBottom.call(d3.axisBottom(xz).tickFormat(this.tickFunctions.contig));
-        this.xTop.call(d3.axisTop(xz).tickFormat(this.tickFunctions.feature));
-        // this.xTop.call(d3.axisTop(xz));
+        this.updateXmarks(xz);
     }
 
     initializeZoom() {
@@ -285,106 +311,9 @@ export default class TrackPlot {
             .on("zoom", event => this.#zoomed(event));
 
         // Register zoom handling function
-        this.svg.call(zoom);
+        this.svg.call(zoom)
             // Optional: Set initial zoom with a transition
             // .transition().duration(2000)
-            // .call(zoom.scaleTo, 2);
+            .call(zoom.scaleTo, 1);
     }
 }
-
-
-// function drawPlot(targetDiv) {
-//   // -------- SVG Container Setup --------
-//   const element = d3.select(targetDiv);
-//   element.style("background-color", "var(--pico-card-background-color)");
-//   element.style("box-shadow", "var(--pico-box-shadow)");
-//   const width  = element.node().offsetWidth;
-//   const height = element.node().offsetHeight;
-//   const margin = {top: 40, bottom: 40, left: 40, right: 40};
-//   const svg = d3.create("svg")
-//     .attr("width", width)
-//     .attr("height", height)
-//     .attr("viewbox", [0, 0, width, height]);
-
-//   // -------- Processing Interval Data --------
-//   // TODO: Define intervals to later be plotted first in preparation for user/API input
-//   // TODO: Calculate plot positions from given list of intervals (bed format, 0-based, half-open)
-//   const intervals = intervalsFromBed(TEST_INTERVALS);
-//   // const minInterval = d3.min(intervals, d => d.start);
-//   // const maxInterval = d3.max(intervals, d => d.stop);
-//   // Stitch intervals onto a shared scale
-//   const stitchPadding = 5;
-//   const [stitchedIntervals, positionMap] = stitchIntervals(intervals, stitchPadding);
-//   const minInterval = d3.min(stitchedIntervals, d => d.pStart);
-//   const maxInterval = d3.max(stitchedIntervals, d => d.pStop);
-//   // console.log(Object.keys(positionMap).length);
-
-//   // -------- Setting Up X/Y Scales --------
-//   const xPadding = 100;
-//   const x = d3.scaleLinear()
-//     .domain([minInterval - xPadding, maxInterval + xPadding])
-//     .range([margin.left, width - margin.right]);
-//   // Generate stacked y axes with a given array of proportions
-//   const yProportions = [0.5, 0.25, 0.25];
-//   const yHeights = yProportions.map(d => d * (height - margin.top - margin.bottom));
-//   const yCoords = d3.pairs(d3.cumsum([margin.top].concat(yHeights)));
-//   const yAxes = yCoords.map(d => 
-//     d3.scaleLinear()
-//       .domain([-1, 1])
-//       .range([d[1], d[0]])
-//   );
-//   // Deconstruct and assign generated axes
-//   const [y0, y1, y2] = yAxes;
-
-//   // -------- Drawing Tracks --------
-//   // const roses = roseTrack(svg, [], x, y0, y1);
-//   const track00 = intervalTrack(svg, stitchedIntervals, x, y1);
-
-//   // -------- Drawing Axis Marks --------
-//   // Main track x axis
-//   // TODO: Need function mapping p coords to g coords for axis display
-//   const xTickFormatGenomicFunc = d => "g." + positionMap[d];
-//   // Draw axis with genomic coord ticks
-//   // TODO: Exclude stitched interval padding from relative coords
-//   const mainX = svg.append("g")
-//     .attr("transform", `translate(0, ${y2(-1)})`)
-//     .call(d3.axisBottom(x).tickFormat(xTickFormatGenomicFunc))
-//   // Draw axis with relative feature position coord ticks
-//   const relX = svg.append("g")
-//     .attr("transform", `translate(0, ${y2(-1)})`)
-//     .call(d3.axisTop(x))
-//   // Draw all y axis marks
-//   const yDivs = yAxes.map(d =>
-//     svg.append("g")
-//       .attr("transform", `translate(${margin.left}, 0)`)
-//       .call(d3.axisLeft(d))
-//   );
-
-//   // -------- Plot Zoom Handling --------
-//   // Track zoom handling function
-//   const minScale = 1;
-//   const maxScale = 800;
-//   function zoomed(event) {
-//     const xz = event.transform.rescaleX(x);
-//     // Calculate rescaled scale (k), x and y values (from default scale of 1)
-//     const rs = event.transform.scale(1);
-//     track00.attr("transform", `translate(${rs.x}) scale(${rs.k}, 1)`)
-//     mainX.call(d3.axisBottom(xz).tickFormat(xTickFormatGenomicFunc))
-//     relX.call(d3.axisTop(xz))
-//   }
-
-//   // Setting up zoom handling using zoom handling function
-//   const zoom = d3.zoom()
-//     .scaleExtent([minScale, maxScale])
-//     .extent([[margin.left, 0], [width - margin.right, height]])
-//     .translateExtent([[margin.left, -Infinity], [width - margin.right, Infinity]])
-//     .on("zoom", zoomed);
-
-//   // Register zoom handling function
-//   svg.call(zoom)
-//     // Optional: Set initial zoom with a transition
-//     // .transition().duration(2000)
-//     // .call(zoom.scaleTo, 2);
-
-//   element.node().append(svg.node());
-// }
