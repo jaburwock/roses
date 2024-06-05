@@ -31,8 +31,8 @@ export default class TrackPlot {
         // Replace config defaults with any user defined config values
         // TODO: Extend this and link to interface elements
         this.config = {...this.config, ...config};
-        this.width  = this.container.node().offsetWidth;
-        this.height = this.container.node().offsetHeight;
+        this.width  = undefined;
+        this.height = undefined;
 
         // TODO: I think the below arrays/lookups can be grouped into
         // - Tick coordinate lookups mapping from a given plot coordinate to some other coordinate system. Genomic, track, etc.
@@ -55,6 +55,7 @@ export default class TrackPlot {
 
         // Adding all plot element group elements here to set overall draw order
         this.svg = this.container.append("svg");
+        // TODO: Shift all below selections into a "containers" object
         this.xTop    = this.svg.append("g");
         this.xBottom = this.svg.append("g");
         this.trackContainerGroup = this.svg.append("g");
@@ -87,12 +88,7 @@ export default class TrackPlot {
 
     // Master function to draw/update plot details (also for window resize)
     draw() {
-        this.width  = this.container.node().offsetWidth;
-        this.height = this.container.node().offsetHeight;
-        this.svg
-            .attr("width", this.width)
-            .attr("height", this.height)
-            .attr("viewbox", [0, 0, this.width, this.height]);
+        this.#resizeFitSVG();
         this.updateYs();
         this.updateX();
         this.#drawPockets();
@@ -108,11 +104,11 @@ export default class TrackPlot {
         }
     }
 
-    #drawLabels() {
+    #drawLabels(transitionDuration=400) {
         this.labelContainer
             .selectAll("text")
             .data(d3.zip(this.tracks, this.yScales), d => d[0].name)
-            .join("text").transition().duration(500)
+            .join("text").transition().duration(transitionDuration)
               .attr("text-anchor", "middle")
               .attr("transform", d => `translate(${this.xScale(0) - 32}, ${d[1](0)}) rotate(-75)`)
               .text(d => d[0].name)
@@ -156,28 +152,43 @@ export default class TrackPlot {
 
     // Draw track information as spanning rectangles track container, return reference to selection of elements
     // TODO: Optionally add transition animation
-    #drawSpans(track, y, xScale) {
+    #drawSpans(track, y, xScale, transitionDuration=400) {
         const height = 0.5;
         const recHeight = Math.abs(y(-height) - y(height));
         const tracks = track.trackContainer.selectAll("rect")
             .data(track.intervals, d => d.start)
             .join("rect")
-            // .transition().duration(600)
-              .attr("y", y(height))
               .attr("x", d => xScale(this.gCoords[d.start]))
               .attr("fill", track.colour)
-              .attr("height", recHeight)
               .attr("width", d => {
-                // console.log((this.gCoords[d.stop]) - xScale(this.gCoords[d.start]));
-                // Interval coordinates 0-based, half open. Subtract 1 from stop when calculating width
-                return xScale(this.gCoords[d.stop - 1]) - xScale(this.gCoords[d.start]);
+                  // console.log((this.gCoords[d.stop]) - xScale(this.gCoords[d.start]));
+                  // Interval coordinates 0-based, half open. Subtract 1 from stop when calculating width
+                  return xScale(this.gCoords[d.stop - 1]) - xScale(this.gCoords[d.start]);
               })
+            .transition().duration(transitionDuration)
+              .attr("y", y(height))
+              .attr("height", recHeight)
         this.config.addIntervalLabels && track.trackContainer
             .selectAll("text")
             .data(track.intervals, d => [d.featureName, d.start])
             .join("text")
               .attr("font-size", 12)
-              .attr("transform", d => `translate(${xScale(this.gCoords[d.start])}, ${y(0)}) rotate(0)`)
+              .attr("x", d => {
+                // Sticky label behaviour
+                // TODO: Make labels stay within rects?
+                const start = xScale(this.gCoords[d.start]);
+                const stop = xScale(this.gCoords[d.stop]);
+                if (start > xScale.domain()[1]) {
+                    return start;
+                } else if (stop < xScale.domain()[0]) {
+                    return stop;
+                } else {
+                    return Math.max(start, xScale.domain()[0]);
+                }
+              })
+            .transition().duration(transitionDuration)
+              .attr("y", y(0))
+            //   .attr("transform", d => `translate(${xScale(this.gCoords[d.start])}, ${y(0)}) rotate(0)`)
             //   .text("transform", d => `translate(400, 400)`)
               .text(d => d.featureName)
 
@@ -208,20 +219,21 @@ export default class TrackPlot {
         );
     }
 
-    // Recalculate pockets from tracks and maxPocketGap (number of positions between intervals/features to create a new pocket)
+    // Function to recalculate pockets from tracks and maxPocketGap (number of positions between 
+    //     intervals/features to create a new pocket)
     // Also recalculates plotEnd, xScale and relative coordinate-spaces relative to the new pockets
     recalculatePockets() {
-        // Aggregate intervals
+        // Aggregate intervals from tracks
         let allIntervals = [];
         for (const track of this.tracks) {
             allIntervals.push(...track.intervals);
         }
-        // Sort by contig start position
+        // Sort all intervals by contig start position
         allIntervals.sort((a, b) => a.start - b.start);
 
         // Loop through interval positions
         // Keep track of the highest last seen end position
-        // If a start position is greater than this.config.maxPocketGap away from the last highest seen end position
+        // If a start position is greater than this.config.maxPocketGap away from the last highest seen end position...
         // Close the last pocket, push to array and open a new pocket starting at that start position
         let lastHighestStop = allIntervals[0].stop;
         let pocketStart = allIntervals[0].start;
@@ -237,6 +249,7 @@ export default class TrackPlot {
         newPockets.push([pocketStart, lastHighestStop]);
         this.pockets = newPockets;
         // xCoords is an array equal to plot length containing corresponding genomic coordinates at each position
+        // TODO: Probably rename this.xCoords to this.gCoords cause like, it's an array of genomic coords
         this.xCoords = this.pockets.map(d => d3.range(d[0] - this.config.gapPadding, d[1] + this.config.gapPadding)).flat();
         // Sparse array mapping gCoords to xCoords
         this.gCoords = new Array();  // Genomic/contig coordinate map
@@ -260,10 +273,10 @@ export default class TrackPlot {
         this.xScale = d3.scaleLinear()
             .domain([0, this.xCoords.length])
             .range([this.config.marginLeft, this.width - this.config.marginRight]);
-        this.updateXmarks(this.xScale);
+        this.#updateXmarks(this.xScale);
     }
 
-    updateXmarks(xs) {
+    #updateXmarks(xs) {
         // Function to update x axis marks based on passed x scale
         // Used for both initial draw and zoom updates
         // Top axis marks are relative to top track intervals
@@ -281,12 +294,12 @@ export default class TrackPlot {
 
     #zoomed(event) {
         const xz = event.transform.rescaleX(this.xScale);
+        // console.log(xz.domain());
         // Calculate rescaled scale (k), x and y values (from default scale of 1)
         const rs = event.transform.scale(1);
         for (const [track, y] of d3.zip(this.tracks, this.yScales)) {
             if (track.type == "span") {
                 this.#drawSpans(track, y, xz);
-
             } else if (track.type == "point") {
                 // console.log("Zooming for point tracks not yet implemented.")
             }
@@ -294,26 +307,38 @@ export default class TrackPlot {
         this.pocketMarks
             .attr("x1", d => xz(d[1]))
             .attr("x2", d => xz(d[1]));
-        this.updateXmarks(xz);
+        this.#updateXmarks(xz);
     }
 
+    // Track zoom handling function
     initializeZoom() {
-        // -------- Plot Zoom Handling --------
-        // Track zoom handling function
         const minScale = 1;
         const maxScale = 1000;
-
         // Setting up zoom handling using zoom handling function
         const zoom = d3.zoom()
             .scaleExtent([minScale, maxScale])
             .extent([[this.config.marginLeft, 0], [this.width - this.config.marginLeft, this.height]])
             .translateExtent([[this.config.marginLeft, -Infinity], [this.width - this.config.marginRight, Infinity]])
             .on("zoom", event => this.#zoomed(event));
-
         // Register zoom handling function
         this.svg.call(zoom)
             // Optional: Set initial zoom with a transition
             // .transition().duration(2000)
             .call(zoom.scaleTo, 1);
     }
+
+    // Function to check if SVG element needs resizing based on containing div properties
+    #resizeFitSVG() {
+        const divwidth = this.container.node().offsetWidth;
+        const divheight = this.container.node().offsetHeight;
+        if (this.width != divwidth || this.height != divheight) {
+            this.width  = this.container.node().offsetWidth;
+            this.height = this.container.node().offsetHeight;
+            this.svg
+              .attr("width", this.width)
+              .attr("height", this.height)
+              .attr("viewbox", [0, 0, this.width, this.height]);
+        }
+    }
+
 }
