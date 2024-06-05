@@ -129,14 +129,14 @@ export default class TrackPlot {
             .data(markCoords, d => d[0])
             .join("line");
         this.pocketMarks
-            .transition().duration(600)
-              .attr("stroke", "var(--pico-color)")
-              .attr("stroke-width", 1)
-              .attr("opacity", 0.8)
-              .attr("y1", top)
-              .attr("y2", bottom)
-              .attr("x1", d => this.xScale(d[1]))
-              .attr("x2", d => this.xScale(d[1]))
+            .attr("stroke", "var(--pico-color)")
+            .attr("stroke-width", 1)
+            .attr("opacity", 0.8)
+            .attr("x1", d => this.xScale(d[1]))
+            .attr("x2", d => this.xScale(d[1]))
+          .transition().duration(600)
+            .attr("y1", top)
+            .attr("y2", bottom)
     }
 
     // TODO: Implement
@@ -178,12 +178,12 @@ export default class TrackPlot {
                 // TODO: Make labels stay within rects?
                 const start = xScale(this.gCoords[d.start]);
                 const stop = xScale(this.gCoords[d.stop]);
-                if (start > xScale.domain()[1]) {
+                if (start > xScale.range()[1]) {
                     return start;
-                } else if (stop < xScale.domain()[0]) {
+                } else if (stop < xScale.range()[0]) {
                     return stop;
                 } else {
-                    return Math.max(start, xScale.domain()[0]);
+                    return Math.max(start, xScale.range()[0]);
                 }
               })
             .transition().duration(transitionDuration)
@@ -230,7 +230,6 @@ export default class TrackPlot {
         }
         // Sort all intervals by contig start position
         allIntervals.sort((a, b) => a.start - b.start);
-
         // Loop through interval positions
         // Keep track of the highest last seen end position
         // If a start position is greater than this.config.maxPocketGap away from the last highest seen end position...
