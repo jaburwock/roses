@@ -89,8 +89,6 @@ async function main() {
   // await new Promise(r => setTimeout(r, 1000));
   // mainPlot.addTrack("Track2", intervalsFromBed(TEST_BED_SIMPLE_01));
   // await new Promise(r => setTimeout(r, 2000));
-  // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS_BRCA2));
-  // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE), {colour: "darkorange"});
   // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS_BRCA2), {colour: "slategrey", yFraction: 2, yOrder: -1, type: "span"});
@@ -100,15 +98,20 @@ async function main() {
   // mainPlot.draw();
 
 
-  const trackScale = d3.scaleSequential([-1, 7], d3.interpolateViridis);
+
+
+  // const trackScale = d3.scaleSequential([-1, 7], d3.interpolateViridis);
+  const trackScale = d3.scaleOrdinal(d3.schemeDark2);
   const uniprotTestJSON = await d3.text('data/CHEK2_uniprot_feature_info.json');
   const uniprotTestTracks = tracksFromUniprotJSON(uniprotTestJSON);
   // console.log(uniprotTestTracks.slice(0, 4));
   for (const i in uniprotTestTracks.slice(0, 4)) {
     const track = uniprotTestTracks[i];
     mainPlot.addTrack(track.name, track.intervals, {colour: trackScale(i)});
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 600));
   }
+  // await new Promise(r => setTimeout(r, 2000));
+  // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS_BRCA2));
 
 
 
