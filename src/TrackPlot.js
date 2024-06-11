@@ -223,7 +223,6 @@ export default class TrackPlot {
     // TODO: Ok, this works but sucks I think.
     // Actually the way I've done this generally kind of sucks. The draw functions are doing more work than
     // they need to on update. Which really comes back to a need to refactor out a Track class.
-    // Actually fucking this is appending a new container every call?
     // Or add an updateOnly=true/false argument that skips unnecessary selectAll statements and attribute modifications
     const flowerboxes = track.trackContainer
       .selectAll("g")
