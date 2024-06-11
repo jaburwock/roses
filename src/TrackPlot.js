@@ -1,6 +1,39 @@
 import * as d3 from 'd3';
 
 
+const ROSE_PATHS = [
+  "M45-45C33-47 24-45-7-27S-45 22-44 41C-36 40-31 42-20 36 11 19 60-22 45-45",
+  "M58-14C47 9 50 4 43 27S-30 17-25 3-6-31 24-30 50-23 58-14",
+  "M17-57C24-45 34-42 39-33 50-10 11 24-1 21S-16-11-11-36C-10-42-6-60 17-57",
+  "M-23-55C-9-55-6-52 1-44 9-36 26 6 10 18-6 28-34-3-31-36-29-47-26-48-23-55",
+  "M-49-24C-54 0-48 9-40 13S17 28 29 8-3-68-49-24",
+  "M-48 27C-47 16-51 16-48 7-39-16-22-33 25-24 59-17 19 16 0 25-19 34-28 41-48 27",
+  "M8 58C-1 58-15 45-24 44-35 43-29-20-2-31 34-43 38 12 36 32 36 45 29 46 25 49 20 52 17 58 8 58",
+  "M-6 13C-34 8-36-18-27-35-21-46-8-50 1-42 7-37 21-39 26-31 31-21 15-17 11-9 5 0 5 15-6 13",
+  "M18-20C-9-44-37-16-41-8-47 7-31 16-24 32-16 41-7 45 5 34 12 28 31 27 25-7 23-16 22-16 18-20",
+  "M-10-13C-33 13-6 42 8 43 17 44 23 34 38 28 51 21 49 11 44 0 41-20 37-26 3-20-6-18-6-17-10-13",
+  "M-7-8C-32 10-14 32 0 32S32 20 32 2 16-39-7-8",
+  "M4 3C-10 10-21 8-26 0S-19-29-4-29 15-17 15-7C13-4 10 0 4 3",
+  "M-10 0C-16-7-11-19 0-19S19-6 19 0 8 18 0 18-13 12-13 7-11 3-10 0",
+  "M5 0A1 1 0 00-6 0 1 1 0 005 0",
+];
+
+
+class Track {
+  // Track config defaults
+  config = {
+    type: "span",  // "point"
+    colour: "steelblue",
+    yFraction: 1,
+    yOrder: 1,
+  }
+
+  constructor(container, name, intervals, config) {
+    this.config = {...this.config, ...config};
+  }
+}
+
+
 // Global TODO:
 // - Finish implementing point/variant tracks
 // - Write some very simple test tracks/intervals to check coordinate systems/positioning
@@ -19,18 +52,19 @@ export default class TrackPlot {
     gapPadding: 0,
     gapPaddingType: "fixed",  // TODO: Add option to make gap padding proportional to absolute distance between pockets
     addTrackLabels: true,
-    addIntervalLabels: true,
+    coordinateTrack: 1,
   }
 
   constructor(targetDiv, config={}) {
-    // List of tracks, each track being an object of structure accessed by a unique name
+    // Replace config defaults with any user defined config values
+    // TODO: Link to interface elements
+    this.config = {...this.config, ...config};
+    // List of tracks and point tracks
     this.tracks = [];
+    this.pointTracks = [];
     this.pockets = [];
     this.container = d3.select(targetDiv);
     this.container.size() == 1 || console.error("TrackPlot constructor error, target div selector non-unique.");
-    // Replace config defaults with any user defined config values
-    // TODO: Extend this and link to interface elements
-    this.config = {...this.config, ...config};
     this.width  = undefined;
     this.height = undefined;
 
@@ -48,8 +82,8 @@ export default class TrackPlot {
     this.xCoordMaps = {};  // TODO: Collect maps/sparse-arrays translating from different coordinate systems to positions on plot x axis
     this.xScale = d3.scaleLinear();
     this.tickFunctions = {
-      contig:  d => (this.xCoords[d] ? 'g.' : '') + (this.xCoords[d] ?? ''),   // This is just awful, switch to maps and check membership gracefully
-      track:   d => this.fCoords.has(d) ? 'c.' + (1 * this.fCoords.get(d) + 0) : '',  // 0-based top track-relative coords
+      contig: d => (this.xCoords[d] ? 'g.' : '') + (this.xCoords[d] ?? ''),   // This is just awful, switch to maps and check membership gracefully
+      track:  d => this.fCoords.has(d) ? 'c.' + (1 * this.fCoords.get(d) + 0) : '',  // 0-based top track-relative coords
     };
     this.yScales = [];
 
@@ -65,6 +99,9 @@ export default class TrackPlot {
   }
 
   addTrack(trackName, intervals, trackConfig={}) {
+    // TODO: Refactor track-related code into Track class exposing a general update method regardless of track type
+    //       So TrackPlot just holds an array of Track objects.
+    // const newTrack = new Track(this.trackContainerGroup, trackName, intervals, trackConfig);
     const trackDefaults = {
       type: "span",  // "point"
       colour: "steelblue",
@@ -72,14 +109,15 @@ export default class TrackPlot {
       yOrder: 1,
     }
     // TODO: Store point tracks in a separate array? So they can be coalesced into a single upper track
-    this.tracks.push({
+    const trackData = {
       ...trackDefaults,
       ...trackConfig,
       name: trackName,
       intervals: intervals,
       yContainer: this.svg.append("g"),
       trackContainer: this.trackContainerGroup.append("g"),
-    });
+    };
+    this.tracks.push(trackData);
     this.tracks.sort((a, b) => a.yOrder - b.yOrder);
     this.recalculatePockets();
     // TODO: Maybe make draw optional so can add a number of tracks then draw all at once
@@ -89,23 +127,22 @@ export default class TrackPlot {
   // Master function to draw/update plot details (also for window resize)
   draw() {
     this.#resizeFitSVG();
-    this.updateYs();
+    this.#updateYs();
     this.updateX();
     this.#drawPockets();
     this.config.addTrackLabels && this.#drawLabels();
     // Loop through tracks and yScales drawing/updating track content
     for (const [track, y] of d3.zip(this.tracks, this.yScales)) {
       if (track.type == "span") {
-        // this.#drawSpans(track, y, this.xScale);
         this.#drawSpans(track, this.xScale, y);
       } else if (track.type == "point") {
         this.#drawPoints(track, this.xScale, y);
-        // console.log("point tracks not yet implemented.")
       }
     }
   }
 
   #drawLabels(transitionDuration=400) {
+    // Draw background rect in left margin of plot matching style background colour
     this.labelContainer
       .selectAll("rect")
       // This feels like a hack to draw a single background rectangle without appending every time
@@ -115,6 +152,7 @@ export default class TrackPlot {
         .attr("width", this.config.marginLeft - 8)
         .attr("height", this.height)
         .attr("fill", "var(--pico-background-color)")
+    // Draw text labels over the background rectangle
     this.labelContainer
       .selectAll("text")
       .data(d3.zip(this.tracks, this.yScales), d => d[0].name)
@@ -152,38 +190,83 @@ export default class TrackPlot {
 
   // TODO: Implement
   #drawPoints(track, x, y, transitionDuration=400) {
+    // TODO: Shift into trackDefaults object in this.addTrack() to centralise all track config.
+    // Having defaults here is useful for dev though
     const pointDefaults = {
-      pointType: "circle",  // One of: circle, square, star, flower, rose
+      pointType: "circle",  // One of: circle, square, star, flower, rose, sakura?
       pointHeight: 0,       // One of: number between -1 and 1, "dodge", "random"
       stem: "line",         // One of: line, curve, randomCurve
     }
     // Set point config as defaults overriden with any values optionally passed through via the addTrack function
     const pointConfig = {...pointDefaults, ...track};
+
+    const pointStems = track.trackContainer
+      .selectAll("path")
+      .data(track.intervals, (_, i) => i)
+      .join("path")
+        .attr("fill", "none")
+        .attr("stroke-width", 2)
+        .attr("stroke", "grey")
+        .attr("opacity", 1.0)
+        .attr("d", (_, i) => {
+          // Dynamically calculate stem paths as a single curve from base to top with fixed offset control points
+          const xc = 0;
+          const yc1 = y(0.2 + Math.sin(i * 1) * 0.20);  // Sin wave for some variance
+          const yc2 = y(-1);
+          const xd = 10;
+          const yd = 40;
+          return `M ${xc} ${yc1} C ${xc - xd} ${yc1 + yd} ${xc + xd} ${yc2 - yd} ${xc} ${yc2}`
+        })
+        // Handle x positioning with a transform as path x is zeroed
+        .attr("transform", d => `translate(${x(d.pStart)})`);
+
+    // TODO: Ok, this works but sucks I think.
+    // Actually the way I've done this generally kind of sucks. The draw functions are doing more work than
+    // they need to on update. Which really comes back to a need to refactor out a Track class.
+    // Actually fucking this is appending a new container every call?
+    // Or add an updateOnly=true/false argument that skips unnecessary selectAll statements and attribute modifications
+    const flowerboxes = track.trackContainer
+      .selectAll("g")
+      .data(track.intervals, (_, i) => i)
+      .join("g")
+        .attr("opacity", 1)
+        .attr("transform", (d, i) => `translate(${x(d.pStart)}, ${y(0.2 + Math.sin(i * 1) * 0.20)}) scale(${0.3})`)
+
+    const petals = flowerboxes.selectAll("path")
+      // Generate data to draw petals/shape from variant objects
+      .data(ROSE_PATHS, (_, i) => i)
+      .join("path")
+        .attr("stroke", "pink")
+        .attr("fill-opacity", 0.6)
+        // .attr("fill", d => d.colour)
+        .attr("fill", "red")
+        .attr("d", d => d)
+        .attr("transform", `rotate(0) scale(1)`)  // Grow from small
   }
 
-  // Draw track information as spanning rectangles track container, return reference to selection of elements
-  // TODO: Optionally add transition animation
-  #drawSpans(track, x, y, transitionDuration=400, trackHeight=0.6, alignTrack="middle") {
+  // Draw track information as spanning rectangles inside the track container, return reference to selection of elements
+  #drawSpans(track, x, y, transitionDuration=400, trackHeight=0.5, alignTrack="top") {
+    // TODO: Shift into trackDefaults object in this.addTrack() to centralise all track config.
+    // Having defaults here is useful for dev though
+    const spanDefaults = {
+      addIntervalLabels: true,
+    }
+    // Set point config as defaults overriden with any values optionally passed through via the addTrack function
+    const spanConfig = {...spanDefaults, ...track};
     const trackY = alignTrack == "middle" ? trackHeight : alignTrack == "bottom" ? (-1 + trackHeight) : 1.0;
     const recHeight = Math.abs(y(-trackHeight) - y(trackHeight));
-    const tracks = track.trackContainer.selectAll("rect")
-      .data(track.intervals, d => d.start)
+    const spans = track.trackContainer.selectAll("rect")
+      .data(track.intervals, (_, i) => i)
       .join("rect")
         .attr("x", d => x(this.gCoords[d.start]))
         .attr("fill", track.colour)
-        .attr("width", d => {
-          if (d.start == d.stop) {
-            // Handling erroneous point coordinates by assuming 1-based, inclusive so converting 
-            //   to 0-based, half-open description of position.
-            return x(d.pStop) - x(d.pStart - 2);
-          } else {
-            return x(d.pStop) - x(d.pStart);
-          }
-        })
+        // Set width and handle 1-based inclusive feature coords avoiding width = 0
+        .attr("width", d =>  d.start == d.stop ? x(d.pStop) - x(d.pStart - 2) : x(d.pStop) - x(d.pStart))
       .transition().duration(transitionDuration)
         .attr("y", y(trackY))
         .attr("height", recHeight)
-    this.config.addIntervalLabels && track.trackContainer
+    // TODO: Make interval label option track-specific instead of global
+    spanConfig.addIntervalLabels && track.trackContainer
       .selectAll("text")
       .data(track.intervals, d => [d.featureName, d.start])
       .join("text")
@@ -191,20 +274,20 @@ export default class TrackPlot {
         .attr("font-size", 12)
         .attr("x", d => {
           // Sticky label behaviour
-          // TODO: Make labels stay within rects?
           const start = x(d.pStart);
           const stop = x(d.pStop);
           return start > x.range()[1] ? start : stop < x.range()[0] ? stop : Math.max(start, x.range()[0]);
         })
       .transition().duration(transitionDuration)
-        .attr("y", y(0))
+        .attr("y", y(trackY - trackHeight))
+        // .attr("y", y(0))
         .text(d => d.featureName)
-    return tracks;
+    return spans;
   }
 
   // Recalculate/update yscales from track yProportions
   // Called on addition or vertical resizing of track
-  updateYs(drawYs=false) {
+  #updateYs(drawYs=false) {
     // Loop through this.tracks
     // Sum yFraction values and calculate proportions as trackFraction / totalFractions
     // Rescale and transform y axes to new heights and positions
@@ -270,10 +353,10 @@ export default class TrackPlot {
     // TODO: Make feature coordinates optionally run from the start of the first interval to the end of the last interval
     // TODO: Also then have option to exclude tracks from the nucleotide/feature coordinates (so can include non-coding features in a plot)
 
-    // Generate set of feature coordiantes relative to the top-most track
+    // Generate set of feature coordiantes relative to the index of the coordinate track
     const fCoords = new Map();
     let count = 0;
-    this.tracks[0].intervals.forEach(d => {
+    this.tracks[Math.min(this.config.coordinateTrack, this.tracks.length - 1)].intervals.forEach(d => {
       this.gCoords.slice(d.start, d.stop).forEach(e => {
         fCoords.set(e, count);
         count += 1;
@@ -323,6 +406,7 @@ export default class TrackPlot {
       if (track.type == "span") {
         this.#drawSpans(track, xz, y);
       } else if (track.type == "point") {
+        this.#drawPoints(track, xz, y);
         // console.log("Zooming for point tracks not yet implemented.")
       }
     }
@@ -335,6 +419,7 @@ export default class TrackPlot {
   // Track zoom handling function
   initializeZoom() {
     const minScale = 1;
+    // TODO: Set maxScale to be a function of plot domain (so max zoom always has roughly the same domain / N positions)
     const maxScale = 1000;
     // Setting up zoom handling using zoom handling function
     const zoom = d3.zoom()

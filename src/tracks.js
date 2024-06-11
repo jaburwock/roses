@@ -158,7 +158,7 @@ export function lollipopTrack(svg, xs, x, y, lowerY) {
       .attr("stroke", "grey")
       .attr("opacity", 0.0)
       .attr("d", d => {
-        // Dynamically calculate stem paths as a single curve from base to top with fixed control point offsets
+        // Dynamically calculate stem paths as a single curve from base to top with fixed offset control points
         const xc = 0;
         const yc1 = y(d.height);
         const yc2 = lowerY(0);

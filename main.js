@@ -79,41 +79,24 @@ function setupFilePicker() {
 
 async function main() {
   const plotTarget = "#app";
-  // TODO: Then like, setupFilePicker(plot);
-
-
-
   const mainPlot = new TrackPlot(plotTarget, {gapPadding: 0});
-  // await new Promise(r => setTimeout(r, 2000));
-  // mainPlot.addTrack("Track1", intervalsFromBed(TEST_BED_SIMPLE_00), {colour: "darkorange"});
-  // await new Promise(r => setTimeout(r, 1000));
-  // mainPlot.addTrack("Track2", intervalsFromBed(TEST_BED_SIMPLE_01));
-  // await new Promise(r => setTimeout(r, 2000));
-  // mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE), {colour: "darkorange"});
-  // await new Promise(r => setTimeout(r, 2000));
-  // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS_BRCA2), {colour: "slategrey", yFraction: 2, yOrder: -1, type: "span"});
-  // mainPlot.initializeZoom();
-  // await new Promise(r => setTimeout(r, 2000));
-  // mainPlot.addTrack("PALB2", intervalsFromBed(TEST_INTERVALS_FIVE));
-  // mainPlot.draw();
-
-
-
 
   // const trackScale = d3.scaleSequential([-1, 7], d3.interpolateViridis);
   const trackScale = d3.scaleOrdinal(d3.schemeDark2);
   const uniprotTestJSON = await d3.text('data/CHEK2_uniprot_feature_info.json');
   const uniprotTestTracks = tracksFromUniprotJSON(uniprotTestJSON);
   // console.log(uniprotTestTracks.slice(0, 4));
-  for (const i in uniprotTestTracks.slice(0, 4)) {
+  for (const i in uniprotTestTracks.slice(0, 2)) {
     const track = uniprotTestTracks[i];
     mainPlot.addTrack(track.name, track.intervals, {colour: trackScale(i)});
     await new Promise(r => setTimeout(r, 600));
   }
   // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS_BRCA2));
-
-
+  const vardata = uniprotTestTracks.find(e => e.name == "Natural variant");
+  mainPlot.addTrack("Natural variants", vardata.intervals,
+    {colour: "red", type: "point", yOrder: -9, addIntervalLabels: false, yFraction: 2}
+  );
 
   // Adding redraw on window resize
   d3.select(window).on("resize", () => mainPlot.draw());
