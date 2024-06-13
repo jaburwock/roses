@@ -124,19 +124,20 @@ export default class TrackPlot {
     this.draw();
   }
 
-  // Master function to draw/update plot details (also for window resize)
+  // Master function to draw/redraw plot details (also for window resize)
   draw() {
     this.#resizeFitSVG();
     this.#updateYs();
     this.updateX();
     this.#drawPockets();
     this.config.addTrackLabels && this.#drawLabels();
-    // Loop through tracks and yScales drawing/updating track content
+    // Loop through tracks and yScales drawing/updating track content and registering returned update() functions
     for (const [track, y] of d3.zip(this.tracks, this.yScales)) {
       if (track.type == "span") {
-        this.#drawSpans(track, this.xScale, y);
+        // this.#drawSpans(track, this.xScale, y);
+        track["updateFunction"] = this.#drawSpans(track, this.xScale, y);
       } else if (track.type == "point") {
-        this.#drawPoints(track, this.xScale, y);
+        track["updateFunction"] = this.#drawPoints(track, this.xScale, y);
       }
     }
   }
@@ -224,6 +225,9 @@ export default class TrackPlot {
     // Actually the way I've done this generally kind of sucks. The draw functions are doing more work than
     // they need to on update. Which really comes back to a need to refactor out a Track class.
     // Or add an updateOnly=true/false argument that skips unnecessary selectAll statements and attribute modifications
+    // Actually maybe starting with that updateOnly arg would be easier. Or each draw function returns an object literal with 
+    // a minimal update function? Then the #zoomed function just calls the update function for each track passing the rescaled
+    // xScale (xz). Or calls the draw function with updateOnly=true.
     const flowerboxes = track.trackContainer
       .selectAll("g")
       .data(track.intervals, (_, i) => i)
@@ -231,16 +235,26 @@ export default class TrackPlot {
         .attr("opacity", 1)
         .attr("transform", (d, i) => `translate(${x(d.pStart)}, ${y(0.2 + Math.sin(i * 1) * 0.20)}) scale(${0.3})`)
 
+    const paletteRed = d3.scaleSequential([7, -2], d3.interpolateReds);
+
     const petals = flowerboxes.selectAll("path")
-      // Generate data to draw petals/shape from variant objects
       .data(ROSE_PATHS, (_, i) => i)
       .join("path")
-        .attr("stroke", "pink")
-        .attr("fill-opacity", 0.6)
-        // .attr("fill", d => d.colour)
-        .attr("fill", "red")
+        .attr("stroke", "mistyrose")
+        // .attr("fill-opacity", (_, i) => 1 - (0.4 + i * 0.03))
+        .attr("fill-opacity", 1)
+        // .attr("fill", "red")
+        .attr("fill", () => paletteRed(Math.random()))
         .attr("d", d => d)
-        .attr("transform", `rotate(0) scale(1)`)  // Grow from small
+        // .attr("transform", `rotate(0) scale(1)`)
+
+    function update(xz, pointScaleFactor=1.0) {
+      flowerboxes
+        .attr("transform", (d, i) => `translate(${xz(d.pStart)}, ${y(0.2 + Math.sin(i * 1) * 0.20)}) scale(${0.3 * pointScaleFactor})`);
+      pointStems
+        .attr("transform", d => `translate(${xz(d.pStart)})`);
+    }
+    return update;
   }
 
   // Draw track information as spanning rectangles inside the track container, return reference to selection of elements
@@ -257,31 +271,49 @@ export default class TrackPlot {
     const spans = track.trackContainer.selectAll("rect")
       .data(track.intervals, (_, i) => i)
       .join("rect")
-        .attr("x", d => x(this.gCoords[d.start]))
+        .attr("x", d => x(d.pStart))
         .attr("fill", track.colour)
         // Set width and handle 1-based inclusive feature coords avoiding width = 0
-        .attr("width", d =>  d.start == d.stop ? x(d.pStop) - x(d.pStart - 2) : x(d.pStop) - x(d.pStart))
-      .transition().duration(transitionDuration)
-        .attr("y", y(trackY))
-        .attr("height", recHeight)
+        .attr("width", d =>  d.start == d.stop ? x(d.pStop) - x(d.pStart - 2) : x(d.pStop) - x(d.pStart));
+    // Transition in spans
+    spans.transition().duration(transitionDuration)
+      .attr("y", y(trackY))
+      .attr("height", recHeight);
     // TODO: Make interval label option track-specific instead of global
-    spanConfig.addIntervalLabels && track.trackContainer
-      .selectAll("text")
-      .data(track.intervals, d => [d.featureName, d.start])
-      .join("text")
-        .attr("fill", "rgb(200, 200, 200)")
-        .attr("font-size", 12)
+    const labelSelection = !spanConfig.addIntervalLabels 
+      ? track.trackContainer.selectAll("text") 
+      : track.trackContainer
+        .selectAll("text")
+        .data(track.intervals, d => [d.featureName, d.start])
+        .join("text")
+          .attr("fill", "rgb(200, 200, 200)")
+          .attr("font-size", 12)
+          .attr("x", d => {
+            // Sticky label behaviour
+            const start = x(d.pStart);
+            const stop = x(d.pStop);
+            return start > x.range()[1] ? start : stop < x.range()[0] ? stop : Math.max(start, x.range()[0]);
+          })
+    // Transition in span labels
+    labelSelection.transition().duration(transitionDuration)
+      .attr("y", y(trackY - trackHeight))
+      .text(d => d.featureName);
+
+    function update(xz) {
+      spans
+        .attr("x", d => xz(d.pStart))
+        .attr("width", d =>  d.start == d.stop ? xz(d.pStop) - xz(d.pStart - 2) : xz(d.pStop) - xz(d.pStart));
+
+      labelSelection
         .attr("x", d => {
           // Sticky label behaviour
-          const start = x(d.pStart);
-          const stop = x(d.pStop);
-          return start > x.range()[1] ? start : stop < x.range()[0] ? stop : Math.max(start, x.range()[0]);
+          const start = xz(d.pStart);
+          const stop = xz(d.pStop);
+          return start > xz.range()[1] ? start : stop < xz.range()[0] ? stop : Math.max(start, xz.range()[0]);
         })
-      .transition().duration(transitionDuration)
-        .attr("y", y(trackY - trackHeight))
-        // .attr("y", y(0))
-        .text(d => d.featureName)
-    return spans;
+    }
+
+    return update;
   }
 
   // Recalculate/update yscales from track yProportions
@@ -401,12 +433,13 @@ export default class TrackPlot {
     const xz = event.transform.rescaleX(this.xScale);
     // Calculate rescaled scale (k), x and y values (from default scale of 1)
     const rs = event.transform.scale(1);
-    for (const [track, y] of d3.zip(this.tracks, this.yScales)) {
+    for (const track of this.tracks) {
       if (track.type == "span") {
-        this.#drawSpans(track, xz, y);
+        track.updateFunction(xz);
       } else if (track.type == "point") {
-        this.#drawPoints(track, xz, y);
-        // console.log("Zooming for point tracks not yet implemented.")
+        // TODO: Use a d3 interpolation/easing function to calculate point scale
+        const pointScaleFactor = Math.min(1.6, 1 + Math.log10(rs.k) / 2);
+        track.updateFunction(xz, pointScaleFactor);
       }
     }
     this.pocketMarks

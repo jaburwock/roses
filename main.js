@@ -89,7 +89,7 @@ async function main() {
   for (const i in uniprotTestTracks.slice(0, 2)) {
     const track = uniprotTestTracks[i];
     mainPlot.addTrack(track.name, track.intervals, {colour: trackScale(i)});
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 400));
   }
   // await new Promise(r => setTimeout(r, 2000));
   // mainPlot.addTrack("BRCA2", intervalsFromBed(TEST_INTERVALS_BRCA2));
